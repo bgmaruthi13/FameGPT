@@ -1,0 +1,126 @@
+# --- 🧩 1. Imports ---
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans, AgglomerativeClustering, DBSCAN
+from sklearn.metrics import silhouette_score, calinski_harabasz_score, davies_bouldin_score
+from sklearn.decomposition import PCA
+from sentence_transformers import SentenceTransformer
+import hdbscan
+import seaborn as sns
+import re
+import nltk
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+
+nltk.download('stopwords')
+nltk.download('wordnet')
+stop_words = set(stopwords.words('english'))
+lemmatizer = WordNetLemmatizer()
+
+
+# --- 🧩 2. Load Excel Data ---
+file_path = "/content/synthetic_support_tickets.csv"  # Ensure this file is in the same directory
+
+df = pd.read_csv(file_path)
+print("✅ Data Loaded. Shape:", df.shape)
+df.head()
+
+
+# --- 🧩 3. Clean and preprocess Short Description ---
+def clean_text(text):
+    text = str(text).lower()
+    text = re.sub(r'[^a-z\s]', '', text)
+    tokens = [lemmatizer.lemmatize(w) for w in text.split() if w not in stop_words]
+    return " ".join(tokens)
+
+df["clean_text"] = df["Short Description"].apply(clean_text)
+print("✅ Text preprocessing done.")
+df.head()
+
+
+# --- 🧩 4. Generate embeddings ---
+model = SentenceTransformer("all-MiniLM-L6-v2")
+embeddings = model.encode(df["clean_text"].tolist(), show_progress_bar=True)
+print("✅ Embeddin# --- 🧩 5. Define clustering evaluation helper ---
+def evaluate_clusters(X, labels):
+    """Returns evaluation metrics for a given clustering"""
+    if len(set(labels)) <= 1 or (len(set(labels)) == 2 and -1 in labels):
+        return {"silhouette": -1, "calinski": -1, "davies": 9999}
+    return {
+        "silhouette": silhouette_score(X, labels),
+        "calinski": calinski_harabasz_score(X, labels),
+        "davies": davies_bouldin_score(X, labels),
+    }
+
+
+
+# --- 🧩 6. Try multiple clustering algorithms ---
+results = {}
+
+# KMeans: Auto find best k via silhouette score
+best_k = None
+best_sil = -1
+for k in range(2, 10):
+    km = KMeans(n_clusters=k, random_state=42)
+    labels = km.fit_predict(embeddings)
+    sil = silhouette_score(embeddings, labels)
+    results[f"KMeans_{k}"] = {"method": "KMeans", "n_clusters": k, "silhouette": sil}
+    if sil > best_sil:
+        best_k, best_sil = k, sil
+
+# Agglomerative
+agg = AgglomerativeClustering(n_clusters=best_k)
+labels_agg = agg.fit_predict(embeddings)
+results["Agglomerative"] = {"method": "Agglomerative", "n_clusters": best_k, **evaluate_clusters(embeddings, labels_agg)}
+
+# DBSCAN
+db = DBSCAN(eps=2, min_samples=3)
+labels_db = db.fit_predict(embeddings)
+results["DBSCAN"] = {"method": "DBSCAN", "n_clusters": len(set(labels_db)) - (1 if -1 in labels_db else 0), **evaluate_clusters(embeddings, labels_db)}
+
+# HDBSCAN
+hdb = hdbscan.HDBSCAN(min_cluster_size=3)
+labels_hdb = hdb.fit_predict(embeddings)
+results["HDBSCAN"] = {"method": "HDBSCAN", "n_clusters": len(set(labels_hdb)) - (1 if -1 in labels_hdb else 0), **evaluate_clusters(embeddings, labels_hdb)}
+
+pd.DataFrame(results).T
+
+
+
+# --- 🧩 7. Pick best clustering method ---
+best_method = max(results, key=lambda x: results[x]["silhouette"])
+print(f"🏆 Best method: {best_method} ({results[best_method]['silhouette']:.3f})")
+
+if "KMeans" in best_method:
+    best_model = KMeans(n_clusters=results[best_method]["n_clusters"], random_state=42)
+    df["Cluster"] = best_model.fit_predict(embeddings)
+elif best_method == "Agglomerative":
+    df["Cluster"] = AgglomerativeClustering(n_clusters=results[best_method]["n_clusters"]).fit_predict(embeddings)
+elif best_method == "DBSCAN":
+    df["Cluster"] = DBSCAN(eps=2, min_samples=3).fit_predict(embeddings)
+else:
+    df["Cluster"] = hdbscan.HDBSCAN(min_cluster_size=3).fit_predict(embeddings)
+
+print("✅ Clustering completed. Unique clusters:", df["Cluster"].nunique())
+
+
+
+# --- 🧩 8. Visualize clusters ---
+pca = PCA(n_components=2)
+reduced = pca.fit_transform(embeddings)
+df["x"] = reduced[:, 0]
+df["y"] = reduced[:, 1]
+
+plt.figure(figsize=(8,6))
+sns.scatterplot(data=df, x="x", y="y", hue="Cluster", palette="tab10", s=70)
+plt.title(f"Cluster Visualization — {best_method}")
+plt.show()
+
+
+# --- 🧩 9. Print cluster samples ---
+for c in sorted(df["Cluster"].unique()):
+    print(f"\n🧩 Cluster {c}:")
+    print(df[df["Cluster"] == c]["Short Description"].head(5).to_string(index=False))
+
+
