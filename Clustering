@@ -121,6 +121,55 @@ plt.show()
 # --- 🧩 9. Print cluster samples ---
 for c in sorted(df["Cluster"].unique()):
     print(f"\n🧩 Cluster {c}:")
+
+
+# --- 🧩 10. Extract Top Keywords for Each Cluster ---
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+# Build a TF-IDF representation
+vectorizer = TfidfVectorizer(max_features=1000, stop_words='english')
+tfidf_matrix = vectorizer.fit_transform(df["clean_text"])
+terms = np.array(vectorizer.get_feature_names_out())
+
+cluster_keywords = {}
+for c in sorted(df["Cluster"].unique()):
+    mask = df["Cluster"] == c
+    if mask.sum() < 2:
+        continue
+    cluster_tfidf = tfidf_matrix[mask.to_numpy()] # Convert boolean Series to numpy array
+    mean_tfidf = np.asarray(cluster_tfidf.mean(axis=0)).flatten()
+    top_indices = mean_tfidf.argsort()[-5:][::-1]   # top 5 keywords
+    top_terms = terms[top_indices]
+    cluster_keywords[c] = ", ".join(top_terms)
+
+# Create a column for top terms
+df["Top Keywords"] = df["Cluster"].apply(lambda c: cluster_keywords.get(c, ""))
+
+
+# --- 🧩 11. Visualize with Cluster Numbers and Keywords ---
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+plt.figure(figsize=(10,7))
+sns.scatterplot(
+    data=df, x="x", y="y", hue="Cluster", palette="tab10", s=70, alpha=0.8, legend=False
+)
+
+# Annotate each cluster centroid
+for c in sorted(df["Cluster"].unique()):
+    subset = df[df["Cluster"] == c]
+    if len(subset) == 0:
+        continue
+    x_mean, y_mean = subset["x"].mean(), subset["y"].mean()
+    label_text = f"Cluster {c}\n{cluster_keywords.get(c, '')}"
+    plt.text(x_mean, y_mean, label_text, fontsize=9, weight="bold",
+             bbox=dict(facecolor="white", alpha=0.8, edgecolor="gray", boxstyle="round,pad=0.4"))
+
+plt.title(f"📊 Ticket Clusters with Keywords — {best_method}")
+plt.xlabel("PCA Dimension 1")
+plt.ylabel("PCA Dimension 2")
+plt.show()
+
     print(df[df["Cluster"] == c]["Short Description"].head(5).to_string(index=False))
 
 
