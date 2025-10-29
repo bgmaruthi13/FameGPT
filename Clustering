@@ -195,3 +195,71 @@ print("\n🔍 Query Results for:", query)
 display(results)
 
 
+# --- 🧩 14. Enhanced RAG-style Query Function with Cluster Intelligence ---
+from sklearn.metrics.pairwise import cosine_similarity
+
+def query_tickets(query, top_n=5):
+    """
+    Enhanced RAG-style search:
+    1. Finds semantically similar tickets
+    2. Provides cluster info, top keywords, and key contributors
+    3. Identifies if it's the largest cluster
+    """
+    q_emb = model.encode([query])
+    sims = cosine_similarity(q_emb, embeddings)[0]
+    idxs = sims.argsort()[-top_n:][::-1]
+    results = df.iloc[idxs][[
+        "Short Description", "Priority", "Requested For Name",
+        "Assigned To Name", "Cluster", "Top Keywords"
+    ]].copy()
+
+    # Identify dominant cluster
+    top_cluster = results["Cluster"].mode().iloc[0]
+    cluster_size = len(df[df["Cluster"] == top_cluster])
+    total_clusters = df["Cluster"].nunique()
+    most_common_assignee = (
+        df[df["Cluster"] == top_cluster]["Assigned To Name"]
+        .value_counts()
+        .idxmax()
+        if "Assigned To Name" in df.columns else "Unknown"
+    )
+    cluster_keywords_top = cluster_keywords.get(top_cluster, "N/A")
+
+    # Check if this cluster is the largest
+    cluster_counts = df["Cluster"].value_counts()
+    largest_cluster = cluster_counts.idxmax()
+    is_largest = top_cluster == largest_cluster
+
+    # --- 🔍 Summary Insight ---
+    print("🔍 Query Results for:", query)
+    print("=" * 80)
+    print(f"🧩 Dominant Cluster: {top_cluster}")
+    print(f"📦 Cluster Size: {cluster_size} tickets (out of {len(df)})")
+    print(f"🗝️  Cluster Keywords: {cluster_keywords_top}")
+    print(f"👨‍💻 Most Active Assignee: {most_common_assignee}")
+    print(f"📊 Is this the largest cluster? {'✅ Yes' if is_largest else '❌ No'}")
+    print(f"📈 Total Clusters in dataset: {total_clusters}")
+    print("-" * 80)
+
+    # --- 🎯 Display top relevant tickets ---
+    display(results)
+
+    # --- 💡 Cluster summary text (like an LLM insight) ---
+    cluster_summary = (
+        f"Cluster {top_cluster} has {cluster_size} tickets, "
+        f"mostly involving keywords like {cluster_keywords_top}. "
+        f"The key contributor seems to be {most_common_assignee}. "
+        f"{'It is also the most frequent cluster in the dataset.' if is_largest else ''}"
+    )
+
+    print("\n💬 RAG Summary Insight:")
+    print(cluster_summary)
+
+    return results, cluster_summary
+
+
+# --- 🧩 15. Try a sample query ---
+query = "Show all high-priority incidents for Subramanian"
+results, summary = query_tickets(query)
+
+
