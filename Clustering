@@ -121,7 +121,7 @@ plt.show()
 # --- 🧩 9. Print cluster samples ---
 for c in sorted(df["Cluster"].unique()):
     print(f"\n🧩 Cluster {c}:")
-
+    print(df[df["Cluster"] == c]["Short Description"].head(5).to_string(index=False))
 
 # --- 🧩 10. Extract Top Keywords for Each Cluster ---
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -169,7 +169,5 @@ plt.title(f"📊 Ticket Clusters with Keywords — {best_method}")
 plt.xlabel("PCA Dimension 1")
 plt.ylabel("PCA Dimension 2")
 plt.show()
-
-    print(df[df["Cluster"] == c]["Short Description"].head(5).to_string(index=False))
 
 
