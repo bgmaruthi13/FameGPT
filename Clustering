@@ -1,3 +1,6 @@
+pip install pandas numpy matplotlib seaborn scikit-learn openpyxl nltk sentence-transformers hdbscan plotly faker jupyter notebook
+
+
 # --- 🧩 1. Imports ---
 import pandas as pd
 import numpy as np
