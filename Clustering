@@ -173,4 +173,25 @@ plt.xlabel("PCA Dimension 1")
 plt.ylabel("PCA Dimension 2")
 plt.show()
 
+# --- 🧩 12. RAG-style Query Function ---
+from sklearn.metrics.pairwise import cosine_similarity
+
+def query_tickets(query, top_n=5):
+
+    """Finds top_n tickets semantically similar to query"""
+    q_emb = model.encode([query])
+    sims = cosine_similarity(q_emb, embeddings)[0]
+    idxs = sims.argsort()[-top_n:][::-1]
+    results = df.iloc[idxs][[
+        "Short Description", "Priority", "Requested For Name",
+        "Assigned To Name", "Cluster", "Top Keywords"
+    ]]
+    return results
+
+# --- 🧩 13. Try a sample query ---
+query = "Show all high-priority incidents for Subramanian"
+results = query_tickets(query)
+print("\n🔍 Query Results for:", query)
+display(results)
+
 
